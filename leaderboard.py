@@ -33,7 +33,8 @@ def formatLeaderMessage(members):
     """
     message = ""
 
-    # add each member to message
+    # add members with at least one star to message
+    members = filter(lambda member: member[2] > 0, members) 
     medals = [':third_place_medal:', ':second_place_medal:', ':trophy:']
     for username, score, stars in members:
         if medals:
@@ -62,6 +63,33 @@ def parseMembers(members_json):
 
     return members
 
+def parseTimes(members_json):
+  day_of_aoc = datetime.datetime.today().strftime("%-d")
+  daily_scores = [(m["name"],m["completion_day_level"].get(day_of_aoc)) for m in members_json.values() if m["completion_day_level"].get(day_of_aoc)]
+  return daily_scores
+
+def format_part1(times):
+  start_time = datetime.datetime.fromisoformat('{}-12-{} 05:00:00+00:00'.format(datetime.datetime.today().year, datetime.datetime.today().strftime("%d"))).timestamp()
+  message = "First star"
+  scores = [(scores[0], scores[1]["1"]["get_star_ts"]) for scores in times]
+  scores_sorted = sorted(scores, key = lambda tup: tup[1])
+  with_place = enumerate(scores_sorted)
+  for (i, scores) in with_place:
+    duration = scores[1] - start_time
+    message += "\n{:0>2}) {:0>8} {}".format(i+1, str(datetime.timedelta(seconds=duration)), scores[0])
+  return message
+
+def format_part2(times):
+  start_time = datetime.datetime.fromisoformat('{}-12-{} 05:00:00+00:00'.format(datetime.datetime.today().year, datetime.datetime.today().strftime("%d"))).timestamp()
+  message = "Second star"
+  scores = [(scores[0], scores[1]["2"]["get_star_ts"], scores[1]["1"]["get_star_ts"]) for scores in times if scores[1].get("2")]
+  scores_sorted = sorted(scores, key = lambda tup: tup[1])
+  with_place = enumerate(scores_sorted)
+  for (i, scores) in with_place:
+    duration = scores[1] - start_time
+    delta = scores[1] - scores[2]
+    message += "\n{:0>2}) {:0>8} {} (+{})".format(i+1, str(datetime.timedelta(seconds=duration)), scores[0], datetime.timedelta(seconds=delta))
+  return message
 
 def postMessage(message):
     """
@@ -103,10 +131,18 @@ def main():
 
     # get members from json
     members = parseMembers(r.json()["members"])
+    times = parseTimes(r.json()["members"])
 
     # generate message to send to slack
     message = formatLeaderMessage(members)
-
+    
+    day = datetime.datetime.today().strftime("%-d")
+    if (int(day) < 26):
+        daymessage = 'Day ' + day + ':'
+        part1 = format_part1(times)
+        part2 = format_part2(times)
+        message = message + '\n\n' + daymessage + '\n\n' + part1 + '\n\n' + part2
+    
     # send message to slack
     postMessage(message)
 
